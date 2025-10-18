@@ -50,6 +50,55 @@ This will train the model and save the following artifacts in a directory called
 - `model/model.pkl` – The trained model serialized in Pickle format.
 - `model/model_features.json` – The list of features (and their order) used during training.
 
+---
+
+## Evaluate the Model
+
+After training, the model is evaluated using standard metrics:
+
+* **R² (coefficient of determination)** — how well the model explains variance in prices
+* **MAE (mean absolute error)** — average dollar error per prediction
+* **RMSE (root mean squared error)** — penalizes larger errors more
+
+Evaluation runs automatically as part of the training script:
+
+```bash
+python create_model.py
+```
+
+This prints results like:
+
+```
+Evaluating model: KNeighborsRegressor
+
+Train Set Performance
+  R²:   0.84 | The model explains 84% of the variance in the target variable
+  MAE:  $76,233 | On average, predictions are off by $76K
+  RMSE: $143,467 | Typical error, penalizing large misses
+
+Test Set Performance
+  R²:   0.73 | Generalization to unseen data
+  MAE:  $102,044
+  RMSE: $201,659
+
+Potential overfitting: train R² much higher than test R².
+```
+
+> Evaluation code can be found in `evaluate_model.py`, which is imported into the training pipeline.
+
+---
+
+## CI Integration
+
+Model evaluation runs automatically on every push or pull request to `develop` and `main`.
+
+* A comment with evaluation results is posted directly on pull requests
+* CI also verifies that model artifacts were saved (`model.pkl`, `model_features.json`)
+
+> Workflow: `.github/workflows/model_evaluation.yml`
+
+---
+
 ## Run the API Locally
 
 With the model artifacts in place, start the API server using FastAPI and Uvicorn:
