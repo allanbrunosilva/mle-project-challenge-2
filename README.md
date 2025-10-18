@@ -11,6 +11,7 @@ This FastAPI application serves a machine learning model that predicts house pri
 - **Basic Predict Endpoint**: Uses a subset of core features only.
 - **Health Check**: Lightweight readiness probe.
 - **Model Metadata**: Versioning and feature count are returned in predictions.
+- **Docker-Compatible**: The API and test script can be used in containerized environments.
 
 ---
 
@@ -22,6 +23,7 @@ This FastAPI application serves a machine learning model that predicts house pri
 - `scikit-learn` (for inference)
 - `uvicorn`
 - `fastapi`
+- `requests`
 
 ## Environment Setup
 
@@ -136,4 +138,38 @@ Accepts a subset of basic features for predictions.
 ```
 ---
 
+## Test the API
+
+Use the provided `test_api.py` script to send test requests based on real unseen examples.
+
+```bash
+python test_api.py
+```
+
+This script:
+
+* Verifies the API is live (`/health`)
+* Loads examples from `data/future_unseen_examples.csv`
+* Sends 10 test requests to the `/predict` endpoint
+* Prints formatted responses
+
+### Override API URL (Docker scenario)
+
+You can override the API base URL using an environment variable:
+
+```bash
+API_URL=http://api:8000 python test_api.py
+```
+
+This is useful when running in Docker or `docker-compose` setups where services communicate by name.
+
+---
+
 For questions or improvements, open an issue or contact the project maintainer.
+
+
+
+
+
+
+
