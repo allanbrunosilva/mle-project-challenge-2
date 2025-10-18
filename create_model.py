@@ -6,9 +6,7 @@ from typing import Tuple
 
 import pandas
 from sklearn import model_selection
-from sklearn import neighbors
-from sklearn import pipeline
-from sklearn import preprocessing
+from sklearn.ensemble import RandomForestRegressor
 from evaluate_model import evaluate
 
 SALES_PATH = "data/kc_house_data.csv"  # path to CSV with home sale data
@@ -59,9 +57,7 @@ def main():
     x_train, x_test, y_train, y_test = model_selection.train_test_split(
         x, y, random_state=42)
 
-    model = pipeline.make_pipeline(preprocessing.RobustScaler(),
-                                   neighbors.KNeighborsRegressor()).fit(
-                                       x_train, y_train)
+    model = RandomForestRegressor(random_state=42).fit(x_train, y_train)
 
     # Evaluate the model
     evaluate(model, x_train, x_test, y_train, y_test)
