@@ -18,6 +18,20 @@ This FastAPI application serves a machine learning model that predicts house pri
 
 ---
 
+## Branches & Deliverables
+
+| Branch                                                                                                                      | Purpose                                                                                   | Connected Requirement                                                                                   |
+|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| [`main`](https://github.com/allanbrunosilva/mle-project-challenge-2/tree/main)                                              | Stable version of the project                                                             | Final project base                                                                                      |
+| [`develop`](https://github.com/allanbrunosilva/mle-project-challenge-2/tree/develop)                                        | Integration branch for active development                                                 | Consolidates feature branches                                                                           |
+| [`feature/api-endpoint`](https://github.com/allanbrunosilva/mle-project-challenge-2/tree/feature/api-endpoint)              | RESTful API for `/predict` and `/predict_basic`, adds backend enrichment                  | Req 1: "POST JSON, join demographic data, return prediction + metadata", Bonus: "subset of features"    |
+| [`feature/test_script`](https://github.com/allanbrunosilva/mle-project-challenge-2/tree/feature/test_script)                | Python script that submits test samples to `/predict` endpoint                            | Req 2: "Submit examples from data/future_unseen_examples.csv"                                           |
+| [`feature/model-evaluation`](https://github.com/allanbrunosilva/mle-project-challenge-2/tree/feature/model-evaluation)      | Adds metrics and evaluation reports (R², MAE, RMSE)                                       | Req 3: "Evaluate how well the model generalizes to new data"                                            |
+| [`experiment/random-forest`](https://github.com/allanbrunosilva/mle-project-challenge-2/tree/experiment/random-forest)      | Replaces `KNeighborsRegressor` with `RandomForestRegressor` for improved generalization   | Req: "use traditional ML, 80% solution"                                                                 |
+| [`deployment/scaling-strategy`](https://github.com/allanbrunosilva/mle-project-challenge-2/tree/deployment/scaling-strategy)| Adds Docker + Kubernetes deployment with autoscaling support                              | Req: "scale API resources without stopping the service", "zero-downtime deployment with new versions"   |
+
+---
+
 ## Requirements
 
 - Python 3.9+
@@ -27,6 +41,8 @@ This FastAPI application serves a machine learning model that predicts house pri
 - `uvicorn`
 - `fastapi`
 - `requests`
+
+---
 
 ## Environment Setup
 
@@ -40,7 +56,9 @@ conda env create -f conda_environment.yml
 conda activate housing
 ```
 
-## Train the Model
+---
+
+## Train and Version the Model
 
 Once you've created and activated the environment, you can run the script which creates the model:
 
@@ -48,10 +66,42 @@ Once you've created and activated the environment, you can run the script which 
 python create_model.py
 ```
 
-This will train the model and save the following artifacts in a directory called `model/`:
+This will train the model and save the following artifacts in a **versioned subdirectory** of `model/`:
 
-- `model/model.pkl` – The trained model serialized in Pickle format.
-- `model/model_features.json` – The list of features (and their order) used during training.
+```
+model/
+└── v1/
+    ├── model.pkl                # The trained model serialized in Pickle format
+    └── model_features.json     # The list of features (and their order) used during training
+```
+
+The active model version is defined in:
+
+```
+model/version.txt
+```
+This file contains a single line like:
+
+```
+v1
+```
+
+> `version.txt` is automatically overwritten every time a new model is trained.
+
+---
+
+### Switching Model Versions
+
+To deploy a new model **without restarting the service**, simply update `version.txt` with the desired version:
+
+```text
+v2
+```
+
+The API will detect the change and **reload the model on the next request**, supporting:
+
+* Zero-downtime model updates
+* Smooth integration with CI/CD pipelines or model registries
 
 ---
 
@@ -91,7 +141,7 @@ Potential overfitting: train R² much higher than test R².
 
 ---
 
-### Model Comparison Results
+## Model Comparison Results
 
 | Model                     | Split |   R² | MAE ($) | RMSE ($) | Notes                         |
 | :------------------------ | :---- | ---: | ------: | -------: | :---------------------------- |
@@ -130,6 +180,8 @@ uvicorn app:app --reload --port 8000
 ```
 
 The server will be available at: [http://localhost:8000](http://localhost:8000)
+
+---
 
 ## Available API Endpoints
 
@@ -238,9 +290,7 @@ This is useful when running in Docker or `docker-compose` setups where services 
 
 ## Kubernetes Autoscaling with Minikube
 
-This section explains how to **scale your FastAPI service automatically** based on CPU usage using **Kubernetes Horizontal Pod Autoscaler (HPA)** and **Dockerized deployment**. Autoscaling ensures your API can handle spikes in traffic by **automatically adding more pods** when CPU usage rises, and **scaling back down** when it's idle — without downtime.
-
----
+This section explains how to **scale this FastAPI service automatically** based on CPU usage using **Kubernetes Horizontal Pod Autoscaler (HPA)** and **Dockerized deployment**. Autoscaling ensures this API can handle spikes in traffic by **automatically adding more pods** when CPU usage rises, and **scaling back down** when it's idle — without downtime.
 
 ### Prerequisites
 
@@ -250,8 +300,6 @@ Make sure you have:
 * Windows PowerShell or terminal available
 * Admin access (for installing tools)
 
----
-
 ### Install Required Tools (Windows via Chocolatey)
 
 ```powershell
@@ -259,8 +307,6 @@ choco install kubernetes-cli
 choco install minikube
 choco install kind
 ```
-
----
 
 ### Start Kubernetes with Minikube
 
@@ -276,8 +322,6 @@ You should see:
 NAME       STATUS   ROLES           AGE     VERSION
 minikube   Ready    control-plane   Xs      v1.34.0
 ```
-
----
 
 ### Build and Deploy the App
 
@@ -310,7 +354,6 @@ kubectl port-forward deployment/house-price-api 8000:8000
 Access the app:
 [http://localhost:8000/health](http://localhost:8000/health)
 
----
 
 ### Enable Autoscaling
 
@@ -322,8 +365,16 @@ minikube addons enable metrics-server
 
 #### 2. Apply autoscaling
 
+Choose either:
+
 ```powershell
 kubectl autoscale deployment house-price-api --cpu=50% --min=1 --max=5
+```
+
+Or the YAML file:
+
+```powershell
+kubectl apply -f hpa.yaml
 ```
 
 #### 3. Watch autoscaler status
@@ -347,8 +398,6 @@ NAME              REFERENCE                    TARGETS       MINPODS   MAXPODS  
 house-price-api   Deployment/house-price-api   cpu: 2%/50%    1         5         1
 ```
 
----
-
 ### Generate Load to Trigger Scaling
 
 ```powershell
@@ -367,8 +416,6 @@ You’ll then see the HPA scale up:
 cpu: 368%/50%   replicas: 1 → 4 → 5
 ```
 
----
-
 ### Scale-Down After Load
 
 Stop the generator with `Ctrl+C`.
@@ -381,12 +428,37 @@ cpu: 9%/50%    replicas: 2
 cpu: 2%/50%    replicas: 1
 ```
 
----
-
 ### Cleanup
 
+Delete the load generator pod (if still running):
 ```powershell
-kubectl delete pod load-generator
+kubectl delete pod load-generator --ignore-not-found
+```
+
+Delete the service exposing the app:
+```powershell
+kubectl delete service house-price-api --ignore-not-found
+```
+
+Delete either HPA (depending on which one you created):
+```powershell
+kubectl delete hpa house-price-api --ignore-not-found
+kubectl delete hpa house-price-api-hpa --ignore-not-found
+```
+
+Delete the deployment and its pods:
+```powershell
+kubectl delete deployment house-price-api --ignore-not-found
+```
+
+Stop the Minikube cluster (keeps your setup for later):
+```powershell
+minikube stop
+```
+
+**(Optional)** Completely remove the Minikube cluster if you want a fresh start:
+```powershell
+minikube delete
 ```
 
 ---
@@ -460,17 +532,10 @@ You can transition this architecture to a production-grade environment using **A
 * Use **CloudWatch** for logs, metrics, and health alerts
 * Optionally add **AWS WAF** or **API Gateway** for extra security
 
----
+### Conclusion
 
 This setup allows **dynamic model versioning**, **horizontal scaling**, and **zero-downtime updates** — ready for real-world cloud deployment.
 
 ---
 
-For questions or improvements, open an issue or contact the project maintainer.
-
-
-
-
-
-
-
+If you have any suggestions, questions or improvements for this project, please **give us feedback** — open an issue or contact the project maintainers.
