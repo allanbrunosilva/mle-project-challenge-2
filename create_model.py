@@ -1,6 +1,4 @@
-import json
-import pathlib
-import pickle
+import os, json, pathlib, pickle
 from typing import List
 from typing import Tuple
 
@@ -17,6 +15,8 @@ SALES_COLUMN_SELECTION = [
     'sqft_above', 'sqft_basement', 'zipcode'
 ]
 OUTPUT_DIR = "model"  # Directory where output artifacts will be saved
+MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")  # Set dynamically via environment variable
+MODEL_DIR = os.path.join(OUTPUT_DIR, MODEL_VERSION)   # Full path for current model version
 
 
 def load_data(
@@ -62,13 +62,17 @@ def main():
     # Evaluate the model
     evaluate(model, x_train, x_test, y_train, y_test)
 
-    output_dir = pathlib.Path(OUTPUT_DIR)
-    output_dir.mkdir(exist_ok=True)
+    output_dir = pathlib.Path(MODEL_DIR)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Output model artifacts: pickled model and JSON list of features
     pickle.dump(model, open(output_dir / "model.pkl", 'wb'))
     json.dump(list(x_train.columns),
               open(output_dir / "model_features.json", 'w'))
+    
+    # Write version marker
+    version_file = pathlib.Path(OUTPUT_DIR) / "version.txt"
+    version_file.write_text(MODEL_VERSION)
 
 
 if __name__ == "__main__":

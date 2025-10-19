@@ -6,34 +6,71 @@ from pydantic import BaseModel
 
 # Config section: uses environment variables for flexibility during deployment
 # These paths can be overridden by Docker env vars or system environment vars.
-MODEL_DIR = os.getenv("MODEL_DIR", "model")
-MODEL_PATH = os.path.join(MODEL_DIR, "model.pkl")
-FEATURES_PATH = os.path.join(MODEL_DIR, "model_features.json")
-DEMOGRAPHICS_PATH = os.getenv("DEMOGRAPHICS_PATH", "data/zipcode_demographics.csv")
-APP_VERSION = os.getenv("APP_VERSION", "0.1.0") # Typical convention for local dev versions
 
-# Function to safely load all model artifacts before starting the API
-def load_artifacts():
-    if not pathlib.Path(MODEL_PATH).exists():
-        raise RuntimeError(f"Model not found at {MODEL_PATH}")
-    if not pathlib.Path(FEATURES_PATH).exists():
-        raise RuntimeError(f"Features JSON not found at {FEATURES_PATH}")
-    if not pathlib.Path(DEMOGRAPHICS_PATH).exists():
-        raise RuntimeError(f"Demographics CSV not found at {DEMOGRAPHICS_PATH}")
-    
-    # Load the serialized model and metadata
-    with open(MODEL_PATH, "rb") as f:
+# App version string
+APP_VERSION = os.getenv("APP_VERSION", "0.1.0")
+
+# Base model directory (default is "model/")
+BASE_MODEL_DIR = os.getenv("MODEL_DIR", "model")
+
+# Path to version marker file
+VERSION_FILE = pathlib.Path(BASE_MODEL_DIR) / "version.txt"
+
+# Default fallback version for local dev/testing
+DEFAULT_MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")
+MODEL_VERSION = (
+    VERSION_FILE.read_text().strip()
+    if VERSION_FILE.exists()
+    else DEFAULT_MODEL_VERSION
+)
+
+# Initial model state
+model = None
+model_features = None
+demographics = None
+last_loaded_version = None
+
+def load_artifacts(model_version: str):
+    """Loads model artifacts for a given version."""
+    model_dir = os.path.join(BASE_MODEL_DIR, model_version)
+    model_path = os.path.join(model_dir, "model.pkl")
+    features_path = os.path.join(model_dir, "model_features.json")
+    demographics_path = os.getenv("DEMOGRAPHICS_PATH", "data/zipcode_demographics.csv")
+
+    # Validate existence
+    if not pathlib.Path(model_path).exists():
+        raise RuntimeError(f"Model not found at {model_path}")
+    if not pathlib.Path(features_path).exists():
+        raise RuntimeError(f"Feature list not found at {features_path}")
+    if not pathlib.Path(demographics_path).exists():
+        raise RuntimeError(f"Demographics CSV not found at {demographics_path}")
+
+    # Load artifacts
+    with open(model_path, "rb") as f:
         model = pickle.load(f)
-    with open(FEATURES_PATH, "r") as f:
+    with open(features_path, "r") as f:
         features = json.load(f)
-
-    # Read ZIP codes as strings to preserve leading zeros (important for merge)
-    demographics = pd.read_csv(DEMOGRAPHICS_PATH, dtype={'zipcode': str})
+    demographics = pd.read_csv(demographics_path, dtype={'zipcode': str})
 
     return model, features, demographics
 
+def load_model_if_updated():
+    """Reloads the model only if version has changed (based on version.txt)."""
+    global model, model_features, demographics, last_loaded_version
+
+    try:
+        current_version = VERSION_FILE.read_text().strip()
+    except FileNotFoundError:
+        current_version = DEFAULT_MODEL_VERSION
+
+    if current_version != last_loaded_version:
+        model, model_features, demographics = load_artifacts(current_version)
+        last_loaded_version = current_version
+        print(f"Model reloaded: {current_version}")
+
+
 # Load model and data into memory once — shared across requests for performance, which avoids expensive reloads per call
-model, model_features, demographics = load_artifacts()
+model, model_features, demographics = load_artifacts(MODEL_VERSION)
 
 app = FastAPI(
     title="Sound Realty House Price Predictor",
@@ -129,6 +166,7 @@ def health():
 @app.post("/predict", response_model=PredictResponse)
 async def predict(request: PredictRequest = Body(...)):
     """Predict house price using the full feature set."""
+    load_model_if_updated()  # Reloads model if needed
     t0 = time.perf_counter() # More precise than time.time() for short durations
     request_df = pd.DataFrame([request.dict()]) # Convert the (Pydantic) request to a plain dict and wrap in a list so pandas builds a single-row DataFrame with correct column names. Passing the model object directly makes pandas treat it as a generic object and you end up with numeric columns (leading to KeyError like 'zipcode').
     
@@ -150,6 +188,7 @@ async def predict(request: PredictRequest = Body(...)):
 @app.post("/predict_basic", response_model=PredictResponse)
 async def predict_basic(request: BasicPredictRequest = Body(...)):
     """Predict house price using only basic features."""
+    load_model_if_updated()  # Reloads model if needed
     t0 = time.perf_counter()
     request_df = pd.DataFrame([request.dict()])
     X, warnings = _prepare_frame(request_df)
