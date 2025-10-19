@@ -30,6 +30,13 @@ jobs:
         run: |
           python create_model.py | tee model_eval_output.txt
 
+      - name: Read model version
+        id: version
+        run: |
+          VERSION=$(cat model/version.txt 2>/dev/null || echo "v1")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
       - name: Prepare comment body
         id: eval_result
         run: |
@@ -61,7 +68,10 @@ jobs:
 
             _This comment was posted automatically by a GitHub Actions workflow._
 
-      - name: Confirm model was saved
+      - name: Confirm model artifacts were saved
         run: |
-          test -f model/model.pkl && echo " Model file exists."
-          test -f model/model_features.json && echo " Feature list exists."
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Checking artifacts in model/$VERSION/"
+          test -f model/$VERSION/model.pkl && echo "Model file exists."
+          test -f model/$VERSION/model_features.json && echo "Feature list exists."
+        shell: bash
