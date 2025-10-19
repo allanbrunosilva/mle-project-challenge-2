@@ -1,0 +1,49 @@
+# Configuration for a Kubernetes Deployment resource
+apiVersion: apps/v1
+kind: Deployment
+
+# Metadata for the deployment (its name in the cluster)
+metadata:
+  name: house-price-api
+
+# Specification of the desired state for the Deployment
+spec:
+  # Number of replicas (pods) to maintain — can be scaled up/down dynamically
+  replicas: 1
+
+  # Tells Kubernetes how to identify the pods that are part of this Deployment
+  selector:
+    matchLabels:
+      app: house-price-api  # Match pods with this label
+
+  # Defines the pod template used to create replicas
+  template:
+    metadata:
+      # Labels to apply to each pod — used for service discovery, scaling, etc.
+      labels:
+        app: house-price-api
+
+    spec:
+      # List of containers that should run in each pod
+      containers:
+        - name: house-price-api  # Internal name of the container
+          image: house-price-api:latest  # Docker image to use (local here)
+
+          # Don't pull the image from a registry — useful for local testing with Minikube
+          imagePullPolicy: Never
+
+          # Expose this port inside the container (FastAPI default)
+          ports:
+            - containerPort: 8000
+
+          # Resource management for this container
+          resources:
+            # Minimum guaranteed resources (useful for scheduling decisions)
+            requests:
+              cpu: "100m"        # 100 millicores = 10% of one CPU
+              memory: "256Mi"    # 256 MiB of RAM
+
+            # Maximum resources this container is allowed to consume
+            limits:
+              cpu: "500m"        # 50% of one CPU
+              memory: "512Mi"    # 512 MiB of RAM

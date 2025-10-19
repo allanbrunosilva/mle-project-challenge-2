@@ -11,7 +11,10 @@ This FastAPI application serves a machine learning model that predicts house pri
 - **Basic Predict Endpoint**: Uses a subset of core features only.
 - **Health Check**: Lightweight readiness probe.
 - **Model Metadata**: Versioning and feature count are returned in predictions.
+- **Dynamic Model Versioning**: Automatically reloads model if updated on disk.
+- **Zero-Downtime Reloads**: Predictions continue uninterrupted while model versions update.
 - **Docker-Compatible**: The API and test script can be used in containerized environments.
+- **Kubernetes-Ready**: Supports autoscaling and version-aware model loading.
 
 ---
 
@@ -104,8 +107,6 @@ Potential overfitting: train R² much higher than test R².
 * Random Forests handle nonlinear relationships, feature interactions, and outliers better than KNN, explaining the improvement.
 
 > The chosen RandomForestRegressor provides a strong, interpretable baseline suitable for deployment and future scaling. Note: `random_state` set to 42.
-
-````
 
 ---
 
@@ -232,6 +233,236 @@ API_URL=http://api:8000 python test_api.py
 ```
 
 This is useful when running in Docker or `docker-compose` setups where services communicate by name.
+
+---
+
+## Kubernetes Autoscaling with Minikube
+
+This section explains how to **scale your FastAPI service automatically** based on CPU usage using **Kubernetes Horizontal Pod Autoscaler (HPA)** and **Dockerized deployment**. Autoscaling ensures your API can handle spikes in traffic by **automatically adding more pods** when CPU usage rises, and **scaling back down** when it's idle — without downtime.
+
+---
+
+### Prerequisites
+
+Make sure you have:
+
+* [Docker Desktop](https://www.docker.com/products/docker-desktop) installed and running
+* Windows PowerShell or terminal available
+* Admin access (for installing tools)
+
+---
+
+### Install Required Tools (Windows via Chocolatey)
+
+```powershell
+choco install kubernetes-cli
+choco install minikube
+choco install kind
+```
+
+---
+
+### Start Kubernetes with Minikube
+
+```powershell
+docker desktop start
+minikube start
+kubectl get nodes
+```
+
+You should see:
+
+```
+NAME       STATUS   ROLES           AGE     VERSION
+minikube   Ready    control-plane   Xs      v1.34.0
+```
+
+---
+
+### Build and Deploy the App
+
+#### 1. Point Docker to Minikube
+
+```powershell
+& minikube -p minikube docker-env --shell powershell | Invoke-Expression
+```
+
+#### 2. Build the Docker image inside Minikube:
+
+```powershell
+docker build -t house-price-api:latest .
+```
+
+#### 3. Deploy the app to Kubernetes
+
+```powershell
+kubectl apply -f deployment.yaml
+kubectl expose deployment house-price-api --type=NodePort --port=8000
+kubectl get pods
+```
+
+#### 4. Port forward for local access
+
+```powershell
+kubectl port-forward deployment/house-price-api 8000:8000
+```
+
+Access the app:
+[http://localhost:8000/health](http://localhost:8000/health)
+
+---
+
+### Enable Autoscaling
+
+#### 1. Enable metrics server (required for HPA)
+
+```powershell
+minikube addons enable metrics-server
+```
+
+#### 2. Apply autoscaling
+
+```powershell
+kubectl autoscale deployment house-price-api --cpu=50% --min=1 --max=5
+```
+
+#### 3. Watch autoscaler status
+
+Choose either:
+
+```powershell
+kubectl get hpa -w
+```
+
+Or live loop with:
+
+```powershell
+while ($true) { kubectl get hpa; Start-Sleep -Seconds 2; Clear-Host }
+```
+
+You’ll initially see:
+
+```
+NAME              REFERENCE                    TARGETS       MINPODS   MAXPODS   REPLICAS
+house-price-api   Deployment/house-price-api   cpu: 2%/50%    1         5         1
+```
+
+---
+
+### Generate Load to Trigger Scaling
+
+```powershell
+kubectl run -i --tty load-generator --rm --image=busybox -- /bin/sh
+```
+
+Inside the pod shell:
+
+```sh
+while true; do wget -q -O- http://house-price-api:8000/health; done
+```
+
+You’ll then see the HPA scale up:
+
+```
+cpu: 368%/50%   replicas: 1 → 4 → 5
+```
+
+---
+
+### Scale-Down After Load
+
+Stop the generator with `Ctrl+C`.
+
+Watch replicas reduce:
+
+```
+cpu: 83%/50%   replicas: 5
+cpu: 9%/50%    replicas: 2
+cpu: 2%/50%    replicas: 1
+```
+
+---
+
+### Cleanup
+
+```powershell
+kubectl delete pod load-generator
+```
+
+---
+
+## ☁️ Deploying to AWS (Production Translation Example)
+
+You can transition this architecture to a production-grade environment using **Amazon Web Services (AWS)** with minimal changes:
+
+### Components Mapping
+
+| Local/Dev Setup      | Production Equivalent on AWS                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| Docker Desktop       | Amazon ECR (Elastic Container Registry) for storing Docker images                           |
+| Minikube (local k8s) | Amazon EKS (Elastic Kubernetes Service) – managed Kubernetes                                |
+| `kubectl` CLI        | Still used in AWS (same commands!)                                                          |
+| Load Generator       | AWS CloudWatch Metrics or Locust/Artillery for load testing                                 |
+| `kubectl autoscale`  | Kubernetes Horizontal Pod Autoscaler (HPA) running in EKS with Cluster Autoscaler for nodes |
+| Local port-forward   | AWS ALB (Application Load Balancer) or NLB (Network Load Balancer)                          |
+| Local storage        | AWS EBS or S3 for model/data artifacts                                                      |
+
+### Steps to Deploy on AWS
+
+#### 1. **Container Registry**
+
+* Push your Docker image to Amazon ECR:
+
+  ```bash
+  aws ecr create-repository --repository-name house-price-api
+  docker tag house-price-api:latest <your-aws-account-id>.dkr.ecr.<region>.amazonaws.com/house-price-api
+  docker push <your-ecr-url>
+  ```
+
+#### 2. **Kubernetes Cluster**
+
+* Use **Amazon EKS** (Elastic Kubernetes Service) to create a managed Kubernetes cluster.
+* Either via:
+
+  * AWS Console wizard (UI)
+  * Or CLI with `eksctl`:
+
+    ```bash
+    eksctl create cluster --name house-price-cluster --region us-west-2 --nodes 2 --node-type t3.medium
+    ```
+
+#### 3. **Model & Data Storage**
+
+* Store model artifacts (`model.pkl`, `model_features.json`, etc.) in:
+
+  * Amazon S3, and mount/download at container start
+  * Or build them into the image (as you currently do)
+
+#### 4. **Scaling**
+
+* Enable **Horizontal Pod Autoscaler (HPA)**, just like in Minikube
+* Also enable **Cluster Autoscaler** to add/remove EC2 worker nodes as needed
+* Monitor scaling with **CloudWatch**
+
+#### 5. **Public Access**
+
+* Use a **LoadBalancer** service in Kubernetes:
+
+  ```yaml
+  type: LoadBalancer
+  ```
+
+  This will provision an AWS ALB/NLB automatically and expose your app publicly.
+
+#### 6. **Security & Monitoring**
+
+* Use AWS IAM roles for access control
+* Use **CloudWatch** for logs, metrics, and health alerts
+* Optionally add **AWS WAF** or **API Gateway** for extra security
+
+---
+
+This setup allows **dynamic model versioning**, **horizontal scaling**, and **zero-downtime updates** — ready for real-world cloud deployment.
 
 ---
 

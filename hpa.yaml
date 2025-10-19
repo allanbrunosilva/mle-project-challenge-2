@@ -1,0 +1,29 @@
+# Horizontal Pod Autoscaler (HPA) resource
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+
+metadata:
+  # The name of this HPA resource in your cluster
+  name: house-price-api-hpa
+
+spec:
+  # Tells the HPA which resource (e.g., Deployment) it should manage
+  scaleTargetRef:
+    apiVersion: apps/v1            # API group of the target resource
+    kind: Deployment               # We're scaling a Deployment resource
+    name: house-price-api          # The name of the Deployment to scale
+
+  # Minimum number of pod replicas (won’t scale below this)
+  minReplicas: 1
+
+  # Maximum number of pod replicas (won’t scale above this)
+  maxReplicas: 5
+
+  # Define what metric to use for scaling (CPU in this case)
+  metrics:
+    - type: Resource               # Resource-based autoscaling
+      resource:
+        name: cpu                  # Target resource is CPU usage
+        target:
+          type: Utilization        # Use percentage of requested CPU
+          averageUtilization: 70   # Scale up/down to maintain ~70% CPU usage
