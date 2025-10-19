@@ -1,0 +1,77 @@
+name: Model Evaluation
+
+on:
+  push:
+    branches: [ develop, main ]
+  pull_request:
+    branches: [ develop, main ]
+  workflow_dispatch:
+
+jobs:
+  evaluate-model:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run model training & evaluation
+        id: run_eval
+        run: |
+          python create_model.py | tee model_eval_output.txt
+
+      - name: Read model version
+        id: version
+        run: |
+          VERSION=$(cat model/version.txt 2>/dev/null || echo "v1")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Prepare comment body
+        id: eval_result
+        run: |
+          # Set a multi-line output 'comment_body' using GitHub's official syntax
+          # This will be picked up by later steps (like the PR comment)
+
+          # Begin a multi-line block called 'comment_body'
+          echo "comment_body<<EOF" >> $GITHUB_OUTPUT
+
+          # Write the first 64KB of the model_eval_output.txt file into the output
+          head -c 64000 model_eval_output.txt >> $GITHUB_OUTPUT
+
+          # End the multi-line block
+          echo "EOF" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Comment evaluation results on PR
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ### 🤖 Model Evaluation Summary
+
+            ```text
+            ${{ steps.eval_result.outputs.comment_body }}
+            ```
+
+            _This comment was posted automatically by a GitHub Actions workflow._
+
+      - name: Confirm model artifacts were saved
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Checking artifacts in model/$VERSION/"
+          test -f model/$VERSION/model.pkl && echo "Model file exists."
+          test -f model/$VERSION/model_features.json && echo "Feature list exists."
+        shell: bash
