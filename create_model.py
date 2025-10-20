@@ -12,10 +12,12 @@ DEMOGRAPHICS_PATH = "data/zipcode_demographics.csv"  # path to CSV with demograp
 # List of columns (subset) that will be taken from home sale data
 SALES_COLUMN_SELECTION = [
     'price', 'bedrooms', 'bathrooms', 'sqft_living', 'sqft_lot', 'floors',
-    'sqft_above', 'sqft_basement', 'zipcode'
+    'sqft_above', 'sqft_basement', 'zipcode', 'waterfront', 'view',
+    'condition', 'grade', 'yr_built', 'yr_renovated', 'lat', 'long',
+    'sqft_living15', 'sqft_lot15'
 ]
 OUTPUT_DIR = "model"  # Directory where output artifacts will be saved
-MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")  # Set dynamically via environment variable
+MODEL_VERSION = os.getenv("MODEL_VERSION", "v3")  # Set dynamically via environment variable
 MODEL_DIR = os.path.join(OUTPUT_DIR, MODEL_VERSION)   # Full path for current model version
 
 
@@ -57,7 +59,15 @@ def main():
     x_train, x_test, y_train, y_test = model_selection.train_test_split(
         x, y, random_state=42)
 
-    model = RandomForestRegressor(random_state=42).fit(x_train, y_train)
+    model = RandomForestRegressor(
+        n_estimators=200,      # Number of trees in the forest — more trees generally improve performance but increase training time
+        max_depth=20,          # Maximum depth of each tree — limits overfitting by preventing trees from growing too deep
+        min_samples_split=5,   # Minimum number of samples required to split an internal node — higher values make the model more conservative
+        min_samples_leaf=2,    # Minimum number of samples required at a leaf node — prevents leaves with very few samples
+        max_features='sqrt',   # Number of features to consider when looking for the best split — 'sqrt' is a common choice for regression
+        random_state=42,       # Ensures reproducibility by fixing the random seed
+        n_jobs=-1              # Use all available CPU cores for parallel training to speed up computation
+    ).fit(x_train, y_train)
 
     # Evaluate the model
     evaluate(model, x_train, x_test, y_train, y_test)
