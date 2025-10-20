@@ -147,16 +147,24 @@ Potential overfitting: train R² much higher than test R².
 | :------------------------ | :---- | ---: | ------: | -------: | :---------------------------- |
 | **KNeighborsRegressor**   | Train | 0.84 |  76,232 |  143,467 | Baseline model                |
 |                           | Test  | 0.73 | 102,045 |  201,659 | Slight overfitting            |
-| **RandomForestRegressor** | Train | 0.97 |  33,013 |   60,326 | Captures nonlinearities well  |
-|                           | Test  | 0.78 |  93,767 |  180,591 | Better generalization overall |
+| **RandomForestRegressor** | Train | 0.95 |  40,094 |   77,106 | Captures complex nonlinear relationships |
+|                           | Test  | 0.87 |  70,811 |  137,456 | Strong generalization and lower error    |
 
 ### 📈 Interpretation
 
-* The **RandomForestRegressor** achieved higher R² on test data (0.78 vs 0.73) and reduced both MAE and RMSE.
-* Training R² (0.97) indicates the model fits data well, though a gap versus test R² (0.78) suggests mild overfitting — acceptable for an 80 % practical solution.
-* Random Forests handle nonlinear relationships, feature interactions, and outliers better than KNN, explaining the improvement.
+* The **updated RandomForestRegressor** significantly outperforms the KNN baseline across all metrics:
 
-> The chosen RandomForestRegressor provides a strong, interpretable baseline suitable for deployment and future scaling. Note: `random_state` set to 42.
+  * **Test R²** improved from **0.73 → 0.87**, showing better explanatory power.
+  * **MAE** decreased from **$102K → $71K**, meaning predictions are much closer on average.
+  * **RMSE** dropped from **$202K → $137K**, indicating fewer large outliers.
+* The training R² of 0.95 suggests a strong fit without excessive overfitting, especially given the modest gap to the test score.
+* Improvements stem from:
+
+  * Adding richer housing and location features (`view`, `grade`, `lat`, etc.)
+  * Tuning Random Forest hyperparameters (e.g. `max_depth=20`, `n_estimators=200`)
+  * Leveraging `n_jobs=-1` for faster and more consistent training.
+
+> The refined **RandomForestRegressor** now provides a well‑balanced, high‑performing model — suitable for deployment and scalable for future feature expansion.
 
 ---
 
