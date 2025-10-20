@@ -8,7 +8,7 @@ from pydantic import BaseModel
 # These paths can be overridden by Docker env vars or system environment vars.
 
 # App version string
-APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "1.1.0")
 
 # Base model directory (default is "model/")
 BASE_MODEL_DIR = os.getenv("MODEL_DIR", "model")
@@ -17,7 +17,7 @@ BASE_MODEL_DIR = os.getenv("MODEL_DIR", "model")
 VERSION_FILE = pathlib.Path(BASE_MODEL_DIR) / "version.txt"
 
 # Default fallback version for local dev/testing
-DEFAULT_MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")
+DEFAULT_MODEL_VERSION = os.getenv("MODEL_VERSION", "v3")
 MODEL_VERSION = (
     VERSION_FILE.read_text().strip()
     if VERSION_FILE.exists()
