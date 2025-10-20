@@ -8,7 +8,7 @@ from pydantic import BaseModel
 # These paths can be overridden by Docker env vars or system environment vars.
 
 # App version string
-APP_VERSION = os.getenv("APP_VERSION", "1.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "1.1.1")
 
 # Base model directory (default is "model/")
 BASE_MODEL_DIR = os.getenv("MODEL_DIR", "model")
@@ -17,7 +17,7 @@ BASE_MODEL_DIR = os.getenv("MODEL_DIR", "model")
 VERSION_FILE = pathlib.Path(BASE_MODEL_DIR) / "version.txt"
 
 # Default fallback version for local dev/testing
-DEFAULT_MODEL_VERSION = os.getenv("MODEL_VERSION", "v2")
+DEFAULT_MODEL_VERSION = os.getenv("MODEL_VERSION", "v3")
 MODEL_VERSION = (
     VERSION_FILE.read_text().strip()
     if VERSION_FILE.exists()
@@ -127,17 +127,23 @@ def _prepare_frame(input_data: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
     if input_data.empty:
         raise HTTPException(status_code=400, detail="400 - Bad request: Empty payload")
 
-    # Sanity check: warn if critical inputs are zero
+    # Sanity check: warn if critical inputs are zero or missing
     critical_features = [
-        "bedrooms", "bathrooms", "sqft_living", "sqft_lot",
-        "sqft_above", "floors", "lat", "long"
+        'bedrooms', 'bathrooms', 'sqft_living', 'sqft_lot', 'floors',
+        'sqft_above', 'sqft_basement', 'waterfront', 'view',
+        'condition', 'grade', 'yr_built', 'yr_renovated', 'lat', 'long',
+        'sqft_living15', 'sqft_lot15'
     ]
     warnings = []
     for feature in critical_features:
         if feature in input_data.columns:
             zero_mask = input_data[feature] == 0
             if zero_mask.any():
-                warnings.append(f"Feature '{feature}' has zero value(s).")
+                warnings.append(f"Feature '{feature}' has a zero value.")
+
+        else:
+            input_data[feature] = 0
+            warnings.append(f"Missing feature '{feature}' in basic input. Defaulted to 0 — this may reduce prediction accuracy.")
 
     # Merge input_data with demographics table
     merged_data = input_data.merge(demographics, how="left", on="zipcode")
@@ -178,7 +184,7 @@ async def predict(request: PredictRequest = Body(...)):
     
     dt_ms = int((time.perf_counter() - t0) * 1000) # Delta time in milliseconds
     return PredictResponse(
-        prediction=float(y),
+        prediction=round(float(y), 2),
         model_version = APP_VERSION,
         features_used = len(model_features),
         time_ms = dt_ms,
@@ -200,7 +206,7 @@ async def predict_basic(request: BasicPredictRequest = Body(...)):
     
     dt_ms = int((time.perf_counter() - t0) * 1000) # Delta time in milliseconds
     return PredictResponse(
-        prediction=float(y),
+        prediction=round(float(y), 2),
         model_version = APP_VERSION,
         features_used = len(model_features),
         time_ms = dt_ms,
